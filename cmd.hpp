@@ -61,8 +61,8 @@ template <typename T> T def(const std::experimental::optional<T> &val, T &&t) {
 
 CommandLineOptions parse(const std::vector<std::string> &arguments) {
     auto file = __details::findValue<std::string>(arguments, "file");
-    if (!file)
-        throw std::runtime_error("Needed param --file missing");
+    //if (!file)
+        //throw std::runtime_error("Needed param --file missing");
 
     auto operation = __details::findValue<std::string>(arguments, "operation");
     if (!operation)

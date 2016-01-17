@@ -11,6 +11,7 @@
 #include "files.hpp"
 #include "log.hpp"
 
+using namespace std;
 
 // task is read a huge file
 // and do operation: 
@@ -24,41 +25,43 @@
 // * --hist-max={0..100} max number of histogram entries
 //
 
-void lines(const std::string &buff, int16_t numberOfThreads) {
-    using namespace std;
+void lines_singleThread( string &&buff) {
+    cout << "Lines = " << count_if(buff.begin(), buff.end(),
+                                   [](char c) -> bool { return c == '\n'; })
+         << endl;
+}
 
-    std::vector<std::future<std::int64_t>> tasks{
-        static_cast<std::size_t>(numberOfThreads)};
-    std::int64_t total = 0;
+void lines(string &&buff, int16_t numberOfThreads) {
+    if (numberOfThreads == 1) {
+        lines_singleThread(move(buff));
+        return;
+    }
+
+    vector<future<int64_t>> tasks{
+        static_cast<size_t>(numberOfThreads)};
+    int64_t total = 0;
     for (int i = 0; i < numberOfThreads; ++i) {
-        std::string part;
-        std::future<std::int64_t> f =
-            std::async(std::launch::async, [](string buff) -> std::int64_t {
-                int number =
-                    std::count_if(buff.begin(), buff.end(),
-                                  [](char c) -> bool { return c == '\n'; });
-                return number;
-            }, buff);
-        tasks[i] = std::move(f);
+        future<int64_t> f = async(launch::async, [](string buff) -> int64_t {
+            return count_if(buff.begin(), buff.end(),
+                            [](char c) -> bool { return c == '\n'; });
+        }, buff.substr(0, buff.size() / numberOfThreads));
+        tasks[i] = move(f);
     }
 
-    for (const auto& f: tasks) {
+    for (auto& f: tasks) {
         f.wait();
-    }
-
-    for(auto &f: tasks) {
         total += f.get();
     }
 
-    std::cout << "Lines: " << total/numberOfThreads << std::endl;
+    cout << "Lines: " << total << endl;
 }
 
-void histogram(std::string &&histogram, int16_t numberOfThreads) {
+void histogram(string &&histogram, int16_t numberOfThreads) {
 
-    std::stringstream ss(histogram);
-    std::string buff;
-    std::vector<std::string> vec;
-    std::map<std::string, std::int64_t> hist;
+    stringstream ss(histogram);
+    string buff;
+    vector<string> vec;
+    map<string, int64_t> hist;
     while(ss >> buff) {
         vec.push_back(buff);
     }
@@ -67,45 +70,45 @@ void histogram(std::string &&histogram, int16_t numberOfThreads) {
         hist[s]++;
     }
 
-    std::multimap<std::int64_t, std::string> mmap;
+    multimap<int64_t, string> mmap;
 
-    std::transform(hist.begin(), hist.end(), std::inserter(mmap, mmap.begin()), 
-            [](const std::pair<std::string, std::int64_t> &p) {
-                return std::make_pair(p.second, p.first);
+    transform(hist.begin(), hist.end(), inserter(mmap, mmap.begin()), 
+            [](const pair<string, int64_t> &p) {
+                return make_pair(p.second, p.first);
             });
 
-    std::cout << "Size = " << vec.size() << std::endl;
+    cout << "Size = " << vec.size() << endl;
 }
 
 int main(int argc, char *argv[]) {
-    const std::vector<std::string> arguments (argv + 1, argv + argc);
+    const vector<string> arguments (argv + 1, argv + argc);
 
     int retVal = EXIT_SUCCESS;
 
     if (arguments.size() == 0) {
-        std::cout << "nope " << std::endl;
+        cout << "nope " << endl;
     }
 
-    const std::map < std::string,
-        std::function<void(std::string &&, std::int16_t)>> operations = {
+    const map < string,
+        function<void(string &&, int16_t)>> operations = {
             {"lines", lines}, {"histogram", histogram}};
 
     try {
         auto args = cmd::parse(arguments);
-        auto filename = std::get<0>(args);
+        auto filename = get<0>(args);
 
         LOG("Checking if file " << filename << " exists");
         if (!fs::exists(filename)) {
-            throw std::runtime_error("File does not exists");
+            throw runtime_error("File does not exists");
         }
 
-        std::int16_t nrThreads = std::get<3>(args);
+        int16_t nrThreads = get<3>(args);
         if (nrThreads == 0) {
-          nrThreads = std::thread::hardware_concurrency();
+          nrThreads = thread::hardware_concurrency();
         }
-        operations.at(std::get<1>(args))(fs::readFile(filename), nrThreads);
+        operations.at(get<1>(args))(fs::readFile(filename), nrThreads);
 
-    } catch (const std::exception &ex) {
+    } catch (const exception &ex) {
         LOG("Exception " << ex.what());
         retVal = EXIT_FAILURE;
     }
